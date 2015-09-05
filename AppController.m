@@ -7,71 +7,82 @@
 const int kMaxDisplays = 16;
 const CFStringRef kDisplayBrightness = CFSTR(kIODisplayBrightnessKey);
 
-- (void) awakeFromNib{
-	
-	//Create the NSStatusBar and set its length
-	statusItem = [[[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength] retain];
-	
-	
-	//Used to detect where our files are
-	NSBundle *bundle = [NSBundle mainBundle];
-	
-	//Allocates and loads the images into the application which will be used for our NSStatusItem
-	statusImage = [[NSImage alloc] initWithContentsOfFile:[bundle pathForResource:@"icon" ofType:@"png"]];
-	statusHighlightImage = [[NSImage alloc] initWithContentsOfFile:[bundle pathForResource:@"icon-alt" ofType:@"png"]];
-	
-	//Sets the images in our NSStatusItem
-	[statusItem setImage:statusImage];
-	[statusItem setAlternateImage:statusHighlightImage];
-	
-	//Tells the NSStatusItem what menu to load
-	[statusItem setMenu:statusMenu];
-	//Sets the tooptip for our item
-	[statusItem setToolTip:@"Brightness Menulet"];
-		
-	[mySlider setIntValue:[self get_brightness]];
-	//Enables highlighting
-	[statusItem setHighlightMode:YES];
-	
-	[mySlider becomeFirstResponder];
-		
+- (void) awakeFromNib
+{
+    int initialBrightness;
+
+    // Create the NSStatusBar and set its length
+    statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
+
+    NSImage *image = [NSImage imageNamed:@"icon"];
+    [image setTemplate:YES];
+
+    // Sets the images in our NSStatusItem
+    [statusItem setImage:image];
+
+    // Tells the NSStatusItem what menu to load
+    [statusItem setMenu:statusMenu];
+
+    [statusMenu setDelegate:self];
+
+    // Sets the tooptip for our item
+    [statusItem setToolTip:@"Brightness Menulet"];
+
+    initialBrightness = [self getBrightness];
+
+    // [mySlider setIntValue:[self get_brightness]];
+    [self setBrightness:initialBrightness];
+    [mySlider setIntValue:initialBrightness];
+
+    // Enables highlighting
+    [statusItem setHighlightMode:YES];
+
+    [mySlider setFocusRingType:NSFocusRingTypeNone];
+
+    [mySlider becomeFirstResponder];
 }
 
+- (void) menuWillOpen:(NSMenu *)menu
+{
+    NSLog(@"click = %lu",(unsigned long)[NSEvent pressedMouseButtons]);
 
-- (int) get_brightness {
-	struct DDCReadCommand read_command;
-	read_command.control_id = 0x10;
-    
-	ddc_read(0, &read_command);
-	return ((int)read_command.response.current_value);
+    if ([NSEvent pressedMouseButtons] == 1) { // left click
+        [quitMenu setHidden:YES];
+    } else {
+        [quitMenu setHidden:NO];
+    }
 }
 
-- (void) set_brightness:(int) new_brightness {
-	struct DDCWriteCommand write_command;
-	write_command.control_id = 0x10;
-	write_command.new_value = new_brightness;
-	ddc_write(0, &write_command);
+- (int) getBrightness
+{
+    int value = [[NSUserDefaults standardUserDefaults] integerForKey:@"brightness"];
+    NSLog(@"brillo = %d", value);
+    return value == 0 ? 90 : value;
 }
 
-- (void) dealloc {
-	//Releases the 2 images we loaded into memory
-	[statusImage release];
-	[statusHighlightImage release];
-	[super dealloc];
+- (void) setBrightness:(int) newBrightness
+{
+    struct DDCWriteCommand write_command;
+    write_command.control_id = 0x10;
+    write_command.new_value = newBrightness;
+    ddc_write(0, &write_command);
+
+    [valueMenu setStringValue:[NSString stringWithFormat:@"%i", newBrightness]];
+
+    [[NSUserDefaults standardUserDefaults] setInteger:newBrightness forKey:@"brightness"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
-
--(IBAction)sliderUpdate:(id)sender{
-	int value = [sender intValue];
+- (IBAction) sliderUpdate:(id)sender
+{
+    int value = [sender intValue];
     NSLog(@"Got brightness %d", value);
-	[self set_brightness:value];
-
+    [self setBrightness:value];
 }
 
--(IBAction)exit:(id)sender{
-	NSLog(@"goodvnye there!");
-	exit(1);
+- (IBAction) exit:(id)sender
+{
+    exit(1);
 }
-
 
 @end
